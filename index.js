@@ -6,6 +6,7 @@ const app = express();
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { z } = require("zod");
 
  
 app.use(express.json());
@@ -22,6 +23,19 @@ const userSchema = new mongoose.Schema({
 })
 
 const User = mongoose.model("User", userSchema);
+
+
+const signupSchema = z.object({
+    name: z.string().min(2).max(100),
+    email: z.string().email(),
+    password: z.string()
+                .min(6)
+                .regex(/[A-Z]/, "Must contain one uppercase letter")
+                .regex(/[a-z]/, "Must contain one lowercase letter")
+                .regex(/[0-9]/, "Must contain one number")
+                .regex(/[^A-Za-z0-9]/, "Must contain one special character")
+
+})
 
 function authMiddleware(req, res, next){
     try{
@@ -51,6 +65,16 @@ app.get("/", function(req, res){
 app.post("/signup", async function(req, res){
     try{
         const { name, email, password } = req.body;
+        const result = signupSchema.safeParse(req.body);
+        if(!result.success){
+            return res.status(400).json({
+                message: "Invalid inputs"
+            })
+        }
+
+        
+
+
         const hashedPassword = await bcrypt.hash(password, 10)
         const response = await User.create({
             name,
