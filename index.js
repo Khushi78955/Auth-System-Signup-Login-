@@ -72,8 +72,14 @@ app.post("/signup", async function(req, res){
             })
         }
 
-        
-
+        const existingUser = await User.findOne({
+            email
+        })
+        if(existingUser){
+            return res.status(400).json({
+                message: "User already exists"
+            })
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10)
         const response = await User.create({
@@ -112,7 +118,10 @@ app.post("/login", async function(req, res){
                 id: user._id,
                 email: user.email
             }, 
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "7d"
+            }
         )
         res.status(200).json({
             message: "Login successful",
