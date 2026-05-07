@@ -7,6 +7,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
+ 
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URL);
@@ -99,6 +100,13 @@ app.post("/login", async function(req, res){
         })
 
     }
+})
+
+app.get("/profile", authMiddleware, async function(req, res){
+    res.status(200).json({
+        message: "Protected profile route",
+        user: req.user
+    })
 })
 
 
