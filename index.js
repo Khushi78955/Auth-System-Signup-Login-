@@ -5,6 +5,7 @@ const app = express();
 
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 app.use(express.json());
 
@@ -21,11 +22,29 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
+function authMiddleware(req, res, next){
+    try{
+        const authHeader = req.headers.authorization
+        const token = authHeader.split(" ")[1];
+        const decodedData = jwt.verify(
+            token,
+            process.env.JWT_SECRET  
+        )
+        req.user = decodedData;
+        next()
+    } catch(err){
+        res.status(401).json({
+            message: "not authorised"
+        })
+    }
+    
+}
+
 app.get("/", function(req, res){
     res.json({
         message: "Auth system"
     })
-})
+}) 
 
 
 app.post("/signup", async function(req, res){
@@ -63,8 +82,16 @@ app.post("/login", async function(req, res){
                 message: "Invalid credentials"
             })
         }
+        const token = jwt.sign(
+            {
+                id: user._id,
+                email: user.email
+            }, 
+            process.env.JWT_SECRET
+        )
         res.status(200).json({
-            message: "Login successful"
+            message: "Login successful",
+            token
         })
     } catch(err){
         res.status(500).json({
@@ -73,5 +100,8 @@ app.post("/login", async function(req, res){
 
     }
 })
+
+
+
 
 app.listen(3000)
