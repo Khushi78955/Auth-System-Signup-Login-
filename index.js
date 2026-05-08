@@ -8,9 +8,20 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { z } = require("zod");
 const cookieParser = require("cookie-parser");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;;
+const session = require("express-session");
+
  
 app.use(express.json());
-app.use(cookieParser())
+app.use(cookieParser());
+app.use(session({
+    secret: "secretkey",
+    resave: false,
+    saveUninitialized: false
+}))
+app.use(passport.initialize());
+app.use(passport.session());
 
 mongoose.connect(process.env.MONGO_URL);
 
@@ -29,8 +40,32 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 })
 
+
+
 const User = mongoose.model("User", userSchema);
 
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/auth/google/callback"
+},
+async function(accessToken, refreshToken, profile, done){
+    try{
+        let user = await User.findOne({
+            email: profile.emails[0].value
+        })
+        if(!user){
+            user = await User.create({
+                name: profile.displayName,
+                email: profile.emails[0].value,
+                password: ""
+            })
+        }
+        done(null, user);
+    } catch(err){
+        done(err, null)
+    }
+}))
 
 const signupSchema = z.object({
     name: z.string().min(2).max(100),
