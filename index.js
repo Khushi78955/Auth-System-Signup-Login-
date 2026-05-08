@@ -253,6 +253,9 @@ app.post("/signup", async function(req, res){
             verificationToken
         })
 
+        const verificationLink = `http://localhost:3000/verify/${verificationToken}`
+        console.log(verificationLink)
+
         res.status(201).json({
             message: "Signup successful",
             user: {
@@ -269,6 +272,33 @@ app.post("/signup", async function(req, res){
 })
 
 
+app.get("/verify/:token", async function(req, res){
+    try{
+        const token = req.params.token
+        const user = await User.findOne({
+            verificationToken: token
+        })
+        if(!user){
+            return res.status(400).json({
+                message: "Invalid token"
+            })
+        }
+
+        user.isVerified = true
+        user.verificationToken = ""
+        
+        await user.save()
+
+        res.status(200).json({
+            message: "email verified successfully"
+        })
+    } catch(err){
+        res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
+})
+
 
 app.post("/login", loginLimiter, async function(req, res){
     try{
@@ -281,10 +311,18 @@ app.post("/login", loginLimiter, async function(req, res){
                 message: "Invalid credentials"
             })
         }
+
         const isMatch = await bcrypt.compare(password, user.password)
+
         if(!isMatch){
             return res.status(401).json({
                 message: "Invalid credentials"
+            })
+        }
+
+        if(!user.isVerified){
+            return res.status(403).json({
+                message: "Please verify your email address"
             })
         }
         const accessToken = jwt.sign(
