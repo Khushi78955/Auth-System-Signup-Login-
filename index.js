@@ -17,7 +17,8 @@ mongoose.connect(process.env.MONGO_URL);
 const userSchema = new mongoose.Schema({
     name: String,
     email: String,
-    password: String
+    password: String,
+    refreshToken: String
 }, {
     timestamps: true
 })
@@ -40,6 +41,13 @@ const signupSchema = z.object({
 function authMiddleware(req, res, next){
     try{
         const token = req.headers.authorization
+        
+        if(!token){
+            return res.status(401).json({
+                message: "Token missing"
+            })
+        }  
+
         const decodedData = jwt.verify(
             token,
             process.env.JWT_SECRET  
@@ -86,7 +94,15 @@ app.post("/signup", async function(req, res){
             email,
             password: hashedPassword
         })
-        res.status(201).json(response)
+
+        res.status(201).json({
+            message: "Signup successful",
+            user: {
+                id: response._id,
+                name: response.name,
+                email: response.email
+            }
+        })
     } catch(err){
         res.status(500).json({
             message: "something went wrong"
@@ -112,19 +128,32 @@ app.post("/login", async function(req, res){
                 message: "Invalid credentials"
             })
         }
-        const token = jwt.sign(
+        const accessToken = jwt.sign(
             {
                 id: user._id,
                 email: user.email
             }, 
             process.env.JWT_SECRET,
             {
+                expiresIn: "15m"
+            }
+        )
+        const refreshToken = jwt.sign(
+            {
+                id: user._id
+            },
+            process.env.JWT_REFRESH_SECRET,
+            {
                 expiresIn: "7d"
             }
         )
+        user.refreshToken = refreshToken;
+        await user.save()
+
         res.status(200).json({
             message: "Login successful",
-            token
+            accessToken,
+            refreshToken
         })
     } catch(err){
         res.status(500).json({
@@ -133,6 +162,49 @@ app.post("/login", async function(req, res){
 
     }
 })
+
+
+app.post("/refresh", async function(req, res){
+    try{
+        const { refreshToken } = req.body;
+        if(!refreshToken){
+            return res.status(401).json({
+                message: "Refresh token required"
+            })
+        }
+        const decoded = jwt.verify(
+            refreshToken,
+            process.env.JWT_REFRESH_SECRET
+        )
+        const user = await User.findById(decoded.id);
+
+        if(!user || user.refreshToken !== refreshToken){
+            return res.status(403).json({
+                message: "Invalid refresh Token"
+            })
+        }
+
+        const newAccessToken = jwt.sign(
+            {
+                id: user._id,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "15m"
+            }
+        )
+
+        res.status(200).json({
+            accessToken: newAccessToken
+        })
+    } catch(err){
+        res.status(403).json({
+            message: "Invalid or expired refresh token"
+        })
+    }
+})
+
 
 app.get("/profile", authMiddleware, async function(req, res){
     res.status(200).json({
