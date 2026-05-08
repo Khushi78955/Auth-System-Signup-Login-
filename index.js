@@ -39,8 +39,7 @@ const signupSchema = z.object({
 
 function authMiddleware(req, res, next){
     try{
-        const authHeader = req.headers.authorization
-        const token = authHeader.split(" ")[1];
+        const token = req.headers.authorization
         const decodedData = jwt.verify(
             token,
             process.env.JWT_SECRET  
@@ -137,7 +136,6 @@ app.post("/login", async function(req, res){
 
 app.get("/profile", authMiddleware, async function(req, res){
     res.status(200).json({
-        message: "Protected profile route",
         user: req.user
     })
 })
