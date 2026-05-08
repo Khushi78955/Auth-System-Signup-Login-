@@ -19,7 +19,12 @@ const userSchema = new mongoose.Schema({
     name: String,
     email: String,
     password: String,
-    refreshToken: String
+    refreshToken: String, 
+    role: {
+        type: String,
+        enum: ["user", "admin"],
+        default: "user"
+    }
 }, {
     timestamps: true
 })
@@ -65,6 +70,15 @@ function authMiddleware(req, res, next){
     
 }
 
+function adminMiddleware(req, res, next){
+    if(req.user.role !== "admin"){
+        return res.status(403).json({
+            message: "Admins only"
+        })
+    }
+    next()
+}
+
 
 app.get("/", function(req, res){
     res.json({
@@ -72,6 +86,12 @@ app.get("/", function(req, res){
     })
 }) 
 
+
+app.get("/admin", authMiddleware, adminMiddleware, function(req, res){
+    res.status(200).json({
+        message: "welcome admin"
+    })
+})
 
 app.post("/signup", async function(req, res){
     try{
@@ -135,7 +155,8 @@ app.post("/login", async function(req, res){
         const accessToken = jwt.sign(
             {
                 id: user._id,
-                email: user.email
+                email: user.email,
+                role: user.role
             }, 
             process.env.JWT_SECRET,
             {
@@ -205,7 +226,8 @@ app.post("/refresh", async function(req, res){
         const newAccessToken = jwt.sign(
             {
                 id: user._id,
-                email: user.email
+                email: user.email, 
+                role: user.role
             },
             process.env.JWT_SECRET,
             {
@@ -220,10 +242,14 @@ app.post("/refresh", async function(req, res){
             maxAge: 15 * 60 * 1000
         })
 
+        // res.status(200).json({
+        //     accessToken: newAccessToken
+        // })
+
         res.status(200).json({
             message: "Access token refreshed"
         })
-
+        
     } catch(err){
         res.status(403).json({
             message: "Invalid or expired refresh token"
