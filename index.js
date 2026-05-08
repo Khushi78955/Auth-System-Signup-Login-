@@ -93,6 +93,7 @@ app.get("/admin", authMiddleware, adminMiddleware, function(req, res){
     })
 })
 
+
 app.post("/signup", async function(req, res){
     try{
         const { name, email, password } = req.body;
@@ -201,6 +202,36 @@ app.post("/login", async function(req, res){
     }
 })
 
+
+app.post("/logout", async function(req, res){
+    try{
+        const refreshToken = req.cookies.refreshToken;
+        if(refreshToken){
+            const decoded = jwt.verify(
+                refreshToken,
+                process.env.JWT_REFRESH_SECRET
+            )
+
+            const user = await User.findById(decoded.id);
+
+            if(user){
+                user.refreshToken = "";
+                await user.save()
+            }
+
+            res.clearCookie("accessToken");
+            res.clearCookie("refreshToken");
+            res.status(200).json({
+                message: "Logout successful"
+            })
+        }
+    } catch(err){
+        res.status(200).json({
+            message: "Logged out"
+        })
+    }
+    
+})
 
 app.post("/refresh", async function(req, res){
     try{
