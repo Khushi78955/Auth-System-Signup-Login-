@@ -16,12 +16,13 @@ const session = require("express-session");
 app.use(express.json());
 app.use(cookieParser());
 app.use(session({
-    secret: "secretkey",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false
 }))
 app.use(passport.initialize());
 app.use(passport.session());
+
 
 mongoose.connect(process.env.MONGO_URL);
 
@@ -66,6 +67,21 @@ async function(accessToken, refreshToken, profile, done){
         done(err, null)
     }
 }))
+
+
+passport.serializeUser(function(user, done){
+    done(null, user._id)
+})
+
+passport.deserializeUser(async function(id, done){
+    try{
+        const user = await User.findById(id);
+        done(null, user)
+    } catch(err){
+        done(err, null)
+    }
+    
+})
 
 const signupSchema = z.object({
     name: z.string().min(2).max(100),
@@ -115,6 +131,7 @@ function adminMiddleware(req, res, next){
 }
 
 
+
 app.get("/", function(req, res){
     res.json({
         message: "Auth system"
@@ -122,11 +139,72 @@ app.get("/", function(req, res){
 }) 
 
 
+
 app.get("/admin", authMiddleware, adminMiddleware, function(req, res){
     res.status(200).json({
         message: "welcome admin"
     })
 })
+
+
+
+app.get("/auth/google",
+    passport.authenticate("google", {
+        scope: ["profile", "email"]
+    })
+)
+
+
+
+app.get("/auth/google/callback",
+    passport.authenticate("google", {
+        failureRedirect: "/login"
+    }),
+    async function(req, res){
+        const accessToken = jwt.sign(
+            {
+                id: req.user._id,
+                email: req.user.email,
+                role: req.user.role
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "15m"
+            }
+        ) 
+        const refreshToken = jwt.sign(
+            {
+                id: req.user._id
+            },
+            process.env.JWT_REFRESH_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        )
+        
+        req.user.refreshToken = refreshToken;
+        await req.user.save();
+
+
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 15 * 60 * 1000
+        })
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        })
+        res.status(200).json({
+            message: "Google login successful"
+        })
+
+
+    }
+)
 
 
 app.post("/signup", async function(req, res){
@@ -169,6 +247,7 @@ app.post("/signup", async function(req, res){
         })
     } 
 })
+
 
 
 app.post("/login", async function(req, res){
@@ -238,6 +317,7 @@ app.post("/login", async function(req, res){
 })
 
 
+
 app.post("/logout", async function(req, res){
     try{
         const refreshToken = req.cookies.refreshToken;
@@ -267,6 +347,8 @@ app.post("/logout", async function(req, res){
     }
     
 })
+
+
 
 app.post("/refresh", async function(req, res){
     try{
@@ -324,12 +406,12 @@ app.post("/refresh", async function(req, res){
 })
 
 
+
 app.get("/profile", authMiddleware, async function(req, res){
     res.status(200).json({
         user: req.user
     })
 })
-
 
 
 
