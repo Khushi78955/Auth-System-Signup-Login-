@@ -7,9 +7,10 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { z } = require("zod");
-
+const cookieParser = require("cookie-parser");
  
 app.use(express.json());
+app.use(cookieParser())
 
 mongoose.connect(process.env.MONGO_URL);
 
@@ -38,10 +39,12 @@ const signupSchema = z.object({
 
 })
 
+
 function authMiddleware(req, res, next){
     try{
-        const token = req.headers.authorization
-        
+        // const token = req.headers.authorization
+        const token = req.cookies.accessToken
+
         if(!token){
             return res.status(401).json({
                 message: "Token missing"
@@ -61,6 +64,7 @@ function authMiddleware(req, res, next){
     }
     
 }
+
 
 app.get("/", function(req, res){
     res.json({
@@ -150,10 +154,23 @@ app.post("/login", async function(req, res){
         user.refreshToken = refreshToken;
         await user.save()
 
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 15 * 60 * 1000
+        })
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        })
+
+
         res.status(200).json({
-            message: "Login successful",
-            accessToken,
-            refreshToken
+            message: "Login successful"
         })
     } catch(err){
         res.status(500).json({
@@ -166,7 +183,8 @@ app.post("/login", async function(req, res){
 
 app.post("/refresh", async function(req, res){
     try{
-        const { refreshToken } = req.body;
+        // const { refreshToken } = req.body;
+        const refreshToken = req.cookies.refreshToken;
         if(!refreshToken){
             return res.status(401).json({
                 message: "Refresh token required"
@@ -195,9 +213,17 @@ app.post("/refresh", async function(req, res){
             }
         )
 
-        res.status(200).json({
-            accessToken: newAccessToken
+        res.cookie("accessToken", newAccessToken, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 15 * 60 * 1000
         })
+
+        res.status(200).json({
+            message: "Access token refreshed"
+        })
+
     } catch(err){
         res.status(403).json({
             message: "Invalid or expired refresh token"
