@@ -11,7 +11,8 @@ const cookieParser = require("cookie-parser");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;;
 const session = require("express-session");
-
+const rateLimit = require("express-rate-limit")
+const crypto = require("crypto")
  
 app.use(express.json());
 app.use(cookieParser());
@@ -36,7 +37,12 @@ const userSchema = new mongoose.Schema({
         type: String,
         enum: ["user", "admin"],
         default: "user"
-    }
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationToken: String
 }, {
     timestamps: true
 })
@@ -82,6 +88,9 @@ passport.deserializeUser(async function(id, done){
     }
     
 })
+
+
+
 
 const signupSchema = z.object({
     name: z.string().min(2).max(100),
@@ -129,6 +138,14 @@ function adminMiddleware(req, res, next){
     }
     next()
 }
+
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: {
+        message: "Too many login attempts. Try again later"
+    }
+})
 
 
 
@@ -227,10 +244,13 @@ app.post("/signup", async function(req, res){
         }
 
         const hashedPassword = await bcrypt.hash(password, 10)
+        const verificationToken = crypto.randomBytes(32).toString("hex")
+
         const response = await User.create({
             name,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            verificationToken
         })
 
         res.status(201).json({
@@ -250,7 +270,7 @@ app.post("/signup", async function(req, res){
 
 
 
-app.post("/login", async function(req, res){
+app.post("/login", loginLimiter, async function(req, res){
     try{
         const { email, password } = req.body;
         const user = await User.findOne({
