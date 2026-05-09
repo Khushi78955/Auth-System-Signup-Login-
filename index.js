@@ -33,6 +33,8 @@ const userSchema = new mongoose.Schema({
     email: String,
     password: String,
     refreshToken: String, 
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
     role: {
         type: String,
         enum: ["user", "admin"],
@@ -149,6 +151,7 @@ const loginLimiter = rateLimit({
 
 
 
+
 app.get("/", function(req, res){
     res.json({
         message: "Auth system"
@@ -224,6 +227,7 @@ app.get("/auth/google/callback",
 )
 
 
+
 app.post("/signup", async function(req, res){
     try{
         const { name, email, password } = req.body;
@@ -272,6 +276,7 @@ app.post("/signup", async function(req, res){
 })
 
 
+
 app.get("/verify/:token", async function(req, res){
     try{
         const token = req.params.token
@@ -298,6 +303,41 @@ app.get("/verify/:token", async function(req, res){
         })
     }
 })
+
+
+
+app.post("/forget-password", async function(req, res){
+    try{
+        const { email } = req.body;
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(404).json({
+                message: "User not found"
+            })
+        }
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        user.resetPasswordToken = resetToken
+        user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
+
+        await user.save();
+
+        const resetLink = `http://localhost:3000/reset-password/${resetToken}`;
+        console.log(resetLink);
+
+        res.status(200).json({
+            message: "Password reset link generated"
+        })
+    } catch(err){
+        res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
+    
+
+
+})
+
+
 
 
 app.post("/login", loginLimiter, async function(req, res){
