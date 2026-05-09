@@ -76,7 +76,8 @@ async function(accessToken, refreshToken, profile, done){
             user = await User.create({
                 name: profile.displayName,
                 email: profile.emails[0].value,
-                password: ""
+                password: "",
+                isVerified: true
             })
         }
         done(null, user);
@@ -150,6 +151,8 @@ function adminMiddleware(req, res, next){
     next()
 }
 
+
+
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
@@ -165,6 +168,7 @@ const otpLimiter = rateLimit({
         message: "Too many OTP requests. Try again later"
     }
 })
+
 
 
 app.get("/", function(req, res){
@@ -303,6 +307,11 @@ app.get("/verify/:token", async function(req, res){
                 message: "Invalid token"
             })
         }
+        if(user.isVerified){
+            return res.status(400).json({
+                message: "User already verified"
+            })
+        }
 
         user.isVerified = true
         user.verificationToken = ""
@@ -327,9 +336,16 @@ app.post("/send-otp", otpLimiter, async function(req, res){
         const user = await User.findOne({
             email
         })
+
         if(!user){
             return res.status(404).json({
                 message: "User not found"
+            })
+        }
+
+        if(user.isVerified){
+            return res.status(400).json({
+                message: "User already verified"
             })
         }
 
@@ -373,7 +389,13 @@ app.post("/verify-otp", async function(req, res){
                 message: "No OTP found"
             })
         }
-        
+
+        if(!user.otpExpires){
+            return res.status(400).json({
+                message: "No OTP request found"
+            })
+        }
+
         if(user.otpExpires < Date.now()){
             return res.status(400).json({
                 message: "OTP expired"
@@ -420,6 +442,12 @@ app.post("/resend-otp", otpLimiter, async function(req, res){
             })
         }
 
+        if(user.isVerified){
+            return res.status(400).json({
+                message: "User already verified"
+            })
+        }
+
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
         const hashedOtp = await bcrypt.hash(otp, 10);
@@ -438,13 +466,11 @@ app.post("/resend-otp", otpLimiter, async function(req, res){
         })
     }
     
-
-
 })
 
 
 
-app.post("/forget-password", async function(req, res){
+app.post("/forgot-password", async function(req, res){
     try{
         const { email } = req.body;
         const user = await User.findOne({email});
@@ -730,4 +756,8 @@ app.get("/profile", authMiddleware, async function(req, res){
 
 
 
-app.listen(3000)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+})
+
