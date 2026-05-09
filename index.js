@@ -30,7 +30,9 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 
-mongoose.connect(process.env.MONGO_URL);
+mongoose.connect(process.env.MONGO_URL)
+.then(() => console.log("MongoDB connected"))
+.catch((err) => console.log(err))
 
 
 const userSchema = new mongoose.Schema({
@@ -471,39 +473,37 @@ app.post("/logout", async function(req, res){
             })
         }
 
+        const decoded = jwt.verify(
+            refreshToken,
+            process.env.JWT_REFRESH_SECRET
+        )
 
-        if(refreshToken){
-            const decoded = jwt.verify(
-                refreshToken,
-                process.env.JWT_REFRESH_SECRET
-            )
+        const user = await User.findById(decoded.id);
 
-            const user = await User.findById(decoded.id);
-
-            if(user){
-                user.refreshToken = "";
-                await user.save()
-            }
-
-            res.clearCookie("accessToken", {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax"
-            });
-
-            res.clearCookie("refreshToken", {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax"
-            });
-
-            return res.status(200).json({
-                message: "Logout successful"
-            })
+        if(user){
+            user.refreshToken = "";
+            await user.save()
         }
-    } catch(err){
+
+        res.clearCookie("accessToken", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax"
+        });
+
+        res.clearCookie("refreshToken", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax"
+        });
+
         return res.status(200).json({
-            message: "Logged out"
+            message: "Logout successful"
+        })
+
+    } catch(err){
+        return res.status(500).json({
+            message: "Something went wrong"
         })
     }
     
