@@ -315,6 +315,9 @@ app.get("/verify/:token", async function(req, res){
 
         user.isVerified = true
         user.verificationToken = ""
+
+        user.otp = ""
+        user.otpExpires = null
         
         await user.save()
 
@@ -411,6 +414,7 @@ app.post("/verify-otp", async function(req, res){
         
 
         user.isVerified = true;
+        user.verificationToken = ""
 
         user.otp = "";
         user.otpExpires = null;
@@ -507,6 +511,20 @@ app.post("/reset-password/:token", async function(req, res){
     try{
         const token = req.params.token;
         const { password } = req.body;
+        const passwordSchema = z.string()
+            .min(6)
+            .regex(/[A-Z]/, "Must contain one uppercase letter")
+            .regex(/[a-z]/, "Must contain one lowercase letter")
+            .regex(/[0-9]/, "Must contain one number")
+            .regex(/[^A-Za-z0-9]/, "Must contain one special character")
+
+        const result = passwordSchema.safeParse(password);
+
+        if(!result.success){
+            return res.status(400).json({
+                message: "Invalid password format"
+            })
+        }
         const user = await User.findOne({
             resetPasswordToken: token
         })
@@ -754,6 +772,14 @@ app.get("/profile", authMiddleware, async function(req, res){
     })
 })
 
+
+
+app.use((req, res) => {
+    return res.status(404).json({
+        message: "Route not found"
+    })
+
+})
 
 
 const PORT = process.env.PORT || 3000;
