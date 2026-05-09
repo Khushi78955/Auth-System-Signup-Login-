@@ -14,6 +14,8 @@ const GitHubStrategy = require("passport-github2").Strategy;
 const session = require("express-session");
 const rateLimit = require("express-rate-limit")
 const crypto = require("crypto")
+const nodemailer = require("nodemailer")
+
  
 app.use(express.json());
 app.use(cookieParser());
@@ -29,6 +31,7 @@ app.use(session({
 }))
 app.use(passport.initialize());
 app.use(passport.session());
+
 
 
 mongoose.connect(process.env.MONGO_URL)
@@ -116,8 +119,6 @@ async function(accessToken, refreshToken, profile, done){
 }))
 
 
-
-
 passport.serializeUser(function(user, done){
     done(null, user._id)
 })
@@ -145,6 +146,15 @@ const signupSchema = z.object({
                 .regex(/[0-9]/, "Must contain one number")
                 .regex(/[^A-Za-z0-9]/, "Must contain one special character")
 
+})
+
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
 })
 
 
@@ -365,10 +375,15 @@ app.post("/signup", async function(req, res){
         })
 
         const verificationLink = `http://localhost:3000/verify/${verificationToken}`
-        console.log(verificationLink)
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Verify your email",
+            text: `Click here to verify your email: ${verificationLink}`
+        })
 
         return res.status(201).json({
-            message: "Signup successful",
+            message: "Signup successful. Please verify your email.",
             user: {
                 id: response._id,
                 name: response.name,
@@ -447,7 +462,12 @@ app.post("/send-otp", otpLimiter, async function(req, res){
 
         await user.save();
 
-        console.log(otp);
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Your OTP code",
+            text: `Your OTP is ${otp}`
+        })
 
         return res.status(200).json({
             message: "OTP sent successfully"
@@ -547,7 +567,13 @@ app.post("/resend-otp", otpLimiter, async function(req, res){
         user.otpExpires = Date.now() + 5 * 60 * 1000;
 
         await user.save();
-        console.log(otp);
+        
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Your OTP code",
+            text: `Your OTP is ${otp}`
+        })
 
         return res.status(200).json({
             message: "OTP sent successfully"
@@ -578,7 +604,12 @@ app.post("/forgot-password", async function(req, res){
         await user.save();
 
         const resetLink = `http://localhost:3000/reset-password/${resetToken}`;
-        console.log(resetLink);
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Reset your password",
+            text: `Click here to reset your password: ${resetLink}`
+        })
 
         return res.status(200).json({
             message: "Password reset link generated"
@@ -659,6 +690,12 @@ app.post("/login", loginLimiter, async function(req, res){
         if(!user){
             return res.status(401).json({
                 message: "Invalid credentials"
+            })
+        }
+
+        if(!user.password){
+            return res.status(400).json({
+                message: "Please login with Google or GitHub"
             })
         }
 
@@ -860,6 +897,28 @@ app.get("/profile", authMiddleware, async function(req, res){
     })
 })
 
+
+
+app.get("/send-mail", async function(req, res){
+    try{
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: process.env.EMAIL_USER,
+            subject: "Test Email",
+            text: "Nodemailer is working"
+        })
+
+        return res.status(200).json({
+            message: "Email sent successfully"
+        })
+    } catch(err){
+        console.log(err);
+        return res.status(500).json({
+            message: "Email failed"
+        })
+    }
+    
+})
 
 
 app.use((req, res) => {
