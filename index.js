@@ -130,7 +130,7 @@ function authMiddleware(req, res, next){
         req.user = decodedData;
         next()
     } catch(err){
-        res.status(401).json({
+        return res.status(401).json({
             message: "not authorised"
         })
     }
@@ -158,7 +158,7 @@ const loginLimiter = rateLimit({
 
 
 app.get("/", function(req, res){
-    res.json({
+    return res.json({
         message: "Auth system"
     })
 }) 
@@ -166,7 +166,7 @@ app.get("/", function(req, res){
 
 
 app.get("/admin", authMiddleware, adminMiddleware, function(req, res){
-    res.status(200).json({
+    return res.status(200).json({
         message: "welcome admin"
     })
 })
@@ -223,7 +223,7 @@ app.get("/auth/google/callback",
             sameSite: "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000
         })
-        res.status(200).json({
+        return res.status(200).json({
             message: "Google login successful"
         })
 
@@ -265,7 +265,7 @@ app.post("/signup", async function(req, res){
         const verificationLink = `http://localhost:3000/verify/${verificationToken}`
         console.log(verificationLink)
 
-        res.status(201).json({
+        return res.status(201).json({
             message: "Signup successful",
             user: {
                 id: response._id,
@@ -274,7 +274,7 @@ app.post("/signup", async function(req, res){
             }
         })
     } catch(err){
-        res.status(500).json({
+        return res.status(500).json({
             message: "something went wrong"
         })
     } 
@@ -299,11 +299,11 @@ app.get("/verify/:token", async function(req, res){
         
         await user.save()
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "email verified successfully"
         })
     } catch(err){
-        res.status(500).json({
+        return res.status(500).json({
             message: "Something went wrong"
         })
     }
@@ -329,11 +329,11 @@ app.post("/forget-password", async function(req, res){
         const resetLink = `http://localhost:3000/reset-password/${resetToken}`;
         console.log(resetLink);
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Password reset link generated"
         })
     } catch(err){
-        res.status(500).json({
+        return res.status(500).json({
             message: "Something went wrong"
         })
     }
@@ -448,11 +448,11 @@ app.post("/login", loginLimiter, async function(req, res){
         })
 
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Login successful"
         })
     } catch(err){
-        res.status(500).json({
+        return res.status(500).json({
             message: "Something went wrong"
         })
 
@@ -464,6 +464,14 @@ app.post("/login", loginLimiter, async function(req, res){
 app.post("/logout", async function(req, res){
     try{
         const refreshToken = req.cookies.refreshToken;
+
+        if(!refreshToken){
+            return res.status(400).json({
+                message: "No refresh token found"
+            })
+        }
+
+
         if(refreshToken){
             const decoded = jwt.verify(
                 refreshToken,
@@ -488,13 +496,13 @@ app.post("/logout", async function(req, res){
                 secure: process.env.NODE_ENV === "production",
                 sameSite: "lax"
             });
-            
-            res.status(200).json({
+
+            return res.status(200).json({
                 message: "Logout successful"
             })
         }
     } catch(err){
-        res.status(200).json({
+        return res.status(200).json({
             message: "Logged out"
         })
     }
@@ -570,12 +578,12 @@ app.post("/refresh", async function(req, res){
         //     accessToken: newAccessToken
         // })
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Access token refreshed"
         })
         
     } catch(err){
-        res.status(403).json({
+        return res.status(403).json({
             message: "Invalid or expired refresh token"
         })
     }
@@ -584,7 +592,7 @@ app.post("/refresh", async function(req, res){
 
 
 app.get("/profile", authMiddleware, async function(req, res){
-    res.status(200).json({
+    return res.status(200).json({
         user: req.user
     })
 })
