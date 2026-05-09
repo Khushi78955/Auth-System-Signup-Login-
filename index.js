@@ -477,8 +477,18 @@ app.post("/logout", async function(req, res){
                 await user.save()
             }
 
-            res.clearCookie("accessToken");
-            res.clearCookie("refreshToken");
+            res.clearCookie("accessToken", {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax"
+            });
+
+            res.clearCookie("refreshToken", {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "production",
+                sameSite: "lax"
+            });
+            
             res.status(200).json({
                 message: "Logout successful"
             })
@@ -506,6 +516,7 @@ app.post("/refresh", async function(req, res){
             refreshToken,
             process.env.JWT_REFRESH_SECRET
         )
+
         const user = await User.findById(decoded.id);
 
         if(!user || user.refreshToken !== refreshToken){
@@ -526,12 +537,34 @@ app.post("/refresh", async function(req, res){
             }
         )
 
+        const newRefreshToken = jwt.sign(
+            {
+                id: user._id,
+            },
+            process.env.JWT_REFRESH_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        )
+
+        user.refreshToken = newRefreshToken;
+        await user.save()
+
         res.cookie("accessToken", newAccessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 15 * 60 * 1000
         })
+
+        res.cookie("refreshToken", newRefreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        })
+
+        
 
         // res.status(200).json({
         //     accessToken: newAccessToken
