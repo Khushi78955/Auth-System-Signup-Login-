@@ -10,6 +10,7 @@ const { z } = require("zod");
 const cookieParser = require("cookie-parser");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;;
+const GitHubStrategy = require("passport-github2").Strategy;
 const session = require("express-session");
 const rateLimit = require("express-rate-limit")
 const crypto = require("crypto")
@@ -80,11 +81,41 @@ async function(accessToken, refreshToken, profile, done){
                 isVerified: true
             })
         }
-        done(null, user);
+        return done(null, user);
     } catch(err){
-        done(err, null)
+        return done(err, null)
     }
 }))
+
+
+
+passport.use(new GitHubStrategy({
+    clientID: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackURL: "/auth/github/callback"
+},
+async function(accessToken, refreshToken, profile, done){
+    try{
+        const email = profile.emails?.[0]?.value || `${profile.username}@github.com`;
+
+        let user = await User.findOne({
+            email
+        })
+        if(!user){
+            user = await User.create({
+                name: profile.username,
+                email,
+                password: "",
+                isVerified: true
+            })
+        }
+        return done(null, user)
+    } catch(err){
+        return done(err, null)
+    }
+}))
+
+
 
 
 passport.serializeUser(function(user, done){
@@ -193,6 +224,11 @@ app.get("/auth/google",
     })
 )
 
+app.get("/auth/github", 
+    passport.authenticate("github", {
+        scope: ["user:email"]
+    })
+)
 
 
 app.get("/auth/google/callback",
@@ -244,6 +280,58 @@ app.get("/auth/google/callback",
 
     }
 )
+
+
+app.get("/auth/github/callback",
+    passport.authenticate("github", {
+        failureMessage: true
+    }),
+    async function(req, res){
+        const accessToken = jwt.sign(
+            {
+                id: req.user._id,
+                email: req.user.email,
+                role: req.user.role
+            },
+            process.env.JWT_SECRET,
+            {
+                expiresIn: "15m"
+            }
+        ) 
+        const refreshToken = jwt.sign(
+            {
+                id: req.user._id
+            },
+            process.env.JWT_REFRESH_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        )
+        
+        req.user.refreshToken = refreshToken;
+        await req.user.save();
+
+
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 15 * 60 * 1000
+        })
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        })
+        return res.status(200).json({
+            message: "Github login successful"
+        })
+
+
+    }
+)
+
 
 
 
