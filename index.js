@@ -42,6 +42,8 @@ const userSchema = new mongoose.Schema({
     refreshToken: String, 
     resetPasswordToken: String,
     resetPasswordExpires: Date,
+    otp: String, 
+    otpExpires: Date,
     role: {
         type: String,
         enum: ["user", "admin"],
@@ -312,6 +314,82 @@ app.get("/verify/:token", async function(req, res){
 })
 
 
+
+app.post("/send-otp", async function(req, res){
+    try{
+        const { email } = req.body;
+        const user = await User.findOne({
+            email
+        })
+        if(!user){
+            return res.status(404).json({
+                message: "User not found"
+            })
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        user.otp = otp;
+        user.otpExpires = Date.now() + 5 * 60 * 1000;
+
+        await user.save();
+
+        console.log(otp);
+
+        return res.status(200).json({
+            message: "OTP sent successfully"
+        })
+    } catch(err){
+        return res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
+    
+
+
+})
+
+
+app.post("/verify-otp", async function(req, res){
+    try{
+        const { email, otp } = req.body;
+        const user = await User.findOne({
+            email
+        })
+        if(!user){
+            return res.status(404).json({
+                message: "User not found"
+            })
+        }
+        if(user.otp !== otp){
+            return res.status(400).json({
+                message: "Invalid otp"
+            })
+        }
+        if(user.otpExpires < Date.now()){
+            return res.status(400).json({
+                message: "OTP expired"
+            })
+        }
+
+        user.isVerified = true;
+
+        user.otp = "";
+        user.otpExpires = null;
+        
+        await user.save();
+
+        return res.status(200).json({
+            message: "OTP verified successfully"
+        })
+    } catch(err){
+        return res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
+    
+
+})
 
 app.post("/forget-password", async function(req, res){
     try{
