@@ -19,7 +19,12 @@ app.use(cookieParser());
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax"
+    }
 }))
 app.use(passport.initialize());
 app.use(passport.session());
@@ -208,13 +213,13 @@ app.get("/auth/google/callback",
 
         res.cookie("accessToken", accessToken, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 15 * 60 * 1000
         })
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000
         })
@@ -339,6 +344,46 @@ app.post("/forget-password", async function(req, res){
 
 
 
+app.post("/reset-password/:token", async function(req, res){
+    try{
+        const token = req.params.token;
+        const { password } = req.body;
+        const user = await User.findOne({
+            resetPasswordToken: token
+        })
+
+        if(!user){
+            return res.status(400).json({
+                message: "Invalid Token"
+            })
+        }
+
+        if(user.resetPasswordExpires < Date.now()){
+            return res.status(400).json({
+                message: "Token expired"
+            })
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user.password = hashedPassword;
+
+        user.resetPasswordToken = ""
+        user.resetPasswordExpires = null
+
+        await user.save();
+
+        return res.status(200).json({
+            message: "Password reset successful"
+        })
+    } catch(err){
+        return res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
+    
+})
+
+
 
 app.post("/login", loginLimiter, async function(req, res){
     try{
@@ -390,14 +435,14 @@ app.post("/login", loginLimiter, async function(req, res){
 
         res.cookie("accessToken", accessToken, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 15 * 60 * 1000
         })
 
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 7 * 24 * 60 * 60 * 1000
         })
@@ -483,7 +528,7 @@ app.post("/refresh", async function(req, res){
 
         res.cookie("accessToken", newAccessToken, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 15 * 60 * 1000
         })
