@@ -158,7 +158,13 @@ const loginLimiter = rateLimit({
     }
 })
 
-
+const otpLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 3,
+    message: {
+        message: "Too many OTP requests. Try again later"
+    }
+})
 
 
 app.get("/", function(req, res){
@@ -315,7 +321,7 @@ app.get("/verify/:token", async function(req, res){
 
 
 
-app.post("/send-otp", async function(req, res){
+app.post("/send-otp", otpLimiter, async function(req, res){
     try{
         const { email } = req.body;
         const user = await User.findOne({
@@ -328,8 +334,8 @@ app.post("/send-otp", async function(req, res){
         }
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        user.otp = otp;
+        const hashedOtp = await bcrypt.hash(otp, 10);
+        user.otp = hashedOtp;
         user.otpExpires = Date.now() + 5 * 60 * 1000;
 
         await user.save();
@@ -350,6 +356,7 @@ app.post("/send-otp", async function(req, res){
 })
 
 
+
 app.post("/verify-otp", async function(req, res){
     try{
         const { email, otp } = req.body;
@@ -361,16 +368,25 @@ app.post("/verify-otp", async function(req, res){
                 message: "User not found"
             })
         }
-        if(user.otp !== otp){
+        if(!user.otp){
             return res.status(400).json({
-                message: "Invalid otp"
+                message: "No OTP found"
             })
         }
+        
         if(user.otpExpires < Date.now()){
             return res.status(400).json({
                 message: "OTP expired"
             })
         }
+
+        const isOtpValid = await bcrypt.compare(otp, user.otp);
+        if(!isOtpValid){
+            return res.status(400).json({
+                message: "Invalid otp"
+            })
+        }
+        
 
         user.isVerified = true;
 
@@ -387,9 +403,46 @@ app.post("/verify-otp", async function(req, res){
             message: "Something went wrong"
         })
     }
+})
+
+
+
+app.post("/resend-otp", otpLimiter, async function(req, res){
+    try{
+        const { email } = req.body;
+        const user = await User.findOne({
+            email
+        })
+
+        if(!user){
+            return res.status(404).json({
+                message: "User not found"
+            })
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        const hashedOtp = await bcrypt.hash(otp, 10);
+        user.otp = hashedOtp;
+        user.otpExpires = Date.now() + 5 * 60 * 1000;
+
+        await user.save();
+        console.log(otp);
+
+        return res.status(200).json({
+            message: "OTP sent successfully"
+        })
+    } catch(err){
+        return res.status(500).json({
+            message: "Something went wrong"
+        })
+    }
     
 
+
 })
+
+
 
 app.post("/forget-password", async function(req, res){
     try{
