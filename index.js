@@ -99,8 +99,7 @@ passport.use(new GitHubStrategy({
 },
 async function(accessToken, refreshToken, profile, done){
     try{
-        const email = profile.emails?.[0]?.value || `${profile.username}@github.com`;
-
+        const email = profile.emails?.[0]?.value 
         let user = await User.findOne({
             email
         })
